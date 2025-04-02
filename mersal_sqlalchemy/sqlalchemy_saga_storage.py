@@ -12,7 +12,7 @@ from mersal.exceptions.base_exceptions import (
     MersalExceptionError,
 )
 from mersal.sagas import CorrelationProperty, SagaData, SagaStorage
-from mersal_alchemy.orm import create_sagas_table
+from mersal_sqlalchemy.orm import create_sagas_table
 
 if TYPE_CHECKING:
     import uuid

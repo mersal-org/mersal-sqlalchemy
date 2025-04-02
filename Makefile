@@ -161,11 +161,7 @@ pre-commit:                                        ## Run pre-commit hooks
 # .PHONY: slotscheck
 # slotscheck:                                        ## Run slotscheck
 # 	@echo "${INFO} Running slotscheck... 🔍"
-# 	@uv run slotscheck core/src
-# 	@uv run slotscheck packages/mersal_polling/src
-# 	@uv run slotscheck packages/mersal_alchemy/src
-# 	@uv run slotscheck packages/mersal_litestar/src
-# 	@uv run slotscheck packages/mersal_msgspec/src
+# 	@uv run slotscheck mersal_sqlalchemy
 # 	@echo "${OK} Slotscheck complete ✨"
 
 .PHONY: fix

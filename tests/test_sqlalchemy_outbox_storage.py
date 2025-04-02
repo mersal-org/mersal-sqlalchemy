@@ -5,11 +5,11 @@ from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from mersal.transport import DefaultTransactionContext
-from mersal_alchemy import (
+from mersal_msgspec import MsgspecSerializer
+from mersal_sqlalchemy import (
     SQLAlchemyOutboxStorage,
     SQLAlchemyOutboxStorageConfig,
 )
-from mersal_msgspec import MsgspecSerializer
 from mersal_testing.test_doubles import (
     OutgoingMessageBuilder,
     TransportMessageBuilder,

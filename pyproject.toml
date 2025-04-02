@@ -40,6 +40,7 @@ linting = [
 test = [
     "pytest",
     "anyio",
+    "mersal-msgspec",
 ]
 
 [tool.uv]
@@ -147,6 +148,7 @@ known-first-party = [
 "mersal",
 "mersal_testing",
 "mersal_sqlalchemy",
+"mersal_msgspec",
 ]
 
 [build-system]

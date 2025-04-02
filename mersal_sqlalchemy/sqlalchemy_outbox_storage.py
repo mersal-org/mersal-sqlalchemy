@@ -8,7 +8,7 @@ from sqlalchemy.orm import registry
 
 from mersal.messages.message_headers import MessageHeaders
 from mersal.outbox import OutboxMessage, OutboxMessageBatch, OutboxStorage
-from mersal_alchemy.orm import create_outbox_table_and_map
+from mersal_sqlalchemy.orm import create_outbox_table_and_map
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

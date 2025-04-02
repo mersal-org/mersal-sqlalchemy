@@ -13,7 +13,7 @@ from mersal.exceptions.base_exceptions import (
 )
 from mersal.sagas import SagaData
 from mersal.transport import DefaultTransactionContext
-from mersal_alchemy import (
+from mersal_sqlalchemy import (
     SQLAlchemySagaStorageConfig,
 )
 from mersal_testing.testing_utils import is_docker_available
