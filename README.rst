@@ -1,5 +1,5 @@
-Mersal
-=======
+mersal-sqlalchemy
+===================
 
 .. list-table::
    :header-rows: 1
@@ -35,4 +35,4 @@ Mersal
           :target: https://github.com/astral-sh/ruff
           :alt: linting - Ruff
 
-**Mersal** is a service bus library for Python.
+SQLAlchemy support for **Mersal**
