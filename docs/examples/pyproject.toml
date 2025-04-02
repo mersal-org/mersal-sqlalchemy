@@ -1,0 +1,25 @@
+[project]
+name = "mersal-rabbitmq-docs"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Abdulhaq Emhemmed", email = "abdulhaq.emhemmed@gmail.com" }
+]
+dependencies = [
+'mersal',
+'sqlalchemy',
+'mersal_rabbitmq',
+]
+readme = "README.md"
+requires-python = ">= 3.10"
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.20.0",
+    "anyio",
+    "trio",
+]
+
+[tool.uv]
+managed = true
+
