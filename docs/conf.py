@@ -8,7 +8,7 @@ from __future__ import annotations
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "Mersal"
+project = "mersal-sqlalchemy"
 copyright = "2025, Abdulhaq Emhemmed"  # noqa: A001
 author = "Abdulhaq Emhemmed"
 release = "0.1"

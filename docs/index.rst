@@ -1,4 +1,6 @@
-Welcome to Mersal RabbitMQ's documentation!
-==================================
+Welcome to mersal-sqlalchemy's documentation!
+=================================================
 
-This is the implementation of a RabbitMQ transport for Mersal.
+Sqlalchemy support for Mersal
+
+docs coming soon...
