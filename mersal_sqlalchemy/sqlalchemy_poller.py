@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any
+
+from mersal_polling import PollingResult, ProblemDetails
+from sqlalchemy import delete, insert, select
+from sqlalchemy.orm import registry
+
+from mersal_sqlalchemy.orm import create_polling_results_table
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+__all__ = (
+    "SQLAlchemyPoller",
+    "SQLAlchemyPollerConfig",
+)
+
+
+@dataclass
+class SQLAlchemyPollerConfig:
+    """Configuration for SQLAlchemyPoller."""
+
+    async_session_factory: async_sessionmaker[AsyncSession]
+    """Session factory used to create sessions for polling operations."""
+    table_name: str
+    """Polling results table name."""
+    poll_interval: float = 0.1
+    """Interval in seconds between poll checks (default: 0.1)."""
+
+    @property
+    def poller(self) -> SQLAlchemyPoller:
+        return SQLAlchemyPoller(self)
+
+
+class SQLAlchemyPoller:
+    def __init__(
+        self,
+        config: SQLAlchemyPollerConfig,
+    ) -> None:
+        self._session_maker = config.async_session_factory
+        self._table_name = config.table_name
+        self._poll_interval = config.poll_interval
+
+    async def poll(self, message_id: Any) -> PollingResult:
+        """Wait for and return the result of a message processing.
+
+        This method blocks until the result is available.
+
+        Args:
+            message_id: The ID of the message to poll for
+
+        Returns:
+            The polling result
+        """
+        while True:
+            result = await self.peek(message_id)
+            if result is not None:
+                return result
+            await asyncio.sleep(self._poll_interval)
+
+    async def peek(self, message_id: Any) -> PollingResult | None:
+        """Check if a result exists without blocking.
+
+        This method returns immediately, either with a result or None.
+        Useful for client-side polling scenarios.
+
+        Args:
+            message_id: The ID of the message to check
+
+        Returns:
+            The polling result if available, None otherwise
+        """
+        async with self._session_maker() as session:
+            stmt = select(self.table).where(self.table.c.message_id == str(message_id))
+            result = (await session.execute(stmt)).first()
+
+            if result is None:
+                return None
+
+            problem = None
+            if result.problem is not None:
+                problem = ProblemDetails(**result.problem)
+
+            return PollingResult(
+                message_id=message_id,
+                data=result.data,
+                problem=problem,
+            )
+
+    async def push(
+        self,
+        message_id: Any,
+        data: dict[str, Any] | None = None,
+        problem: ProblemDetails | None = None,
+    ) -> None:
+        """Store the result of a message processing.
+
+        Args:
+            message_id: The ID of the message
+            data: Success data (for rich results, batch operations)
+            problem: Structured error information (RFC 7807) for failures
+        """
+        async with self._session_maker() as session:
+            problem_dict = None
+            if problem is not None:
+                problem_dict = {
+                    "type": problem.type,
+                    "title": problem.title,
+                    "status": problem.status,
+                    "detail": problem.detail,
+                    "instance": problem.instance,
+                    "extensions": problem.extensions,
+                }
+
+            await session.execute(
+                insert(self.table),
+                [
+                    {
+                        "message_id": str(message_id),
+                        "data": data,
+                        "problem": problem_dict,
+                        "created_at": datetime.now(timezone.utc),
+                    }
+                ],
+            )
+            await session.commit()
+
+    async def cleanup(self, older_than: timedelta) -> int:
+        """Clean up old polling results.
+
+        Args:
+            older_than: Delete results older than this timedelta
+
+        Returns:
+            Number of records deleted
+        """
+        cutoff_time = datetime.now(timezone.utc) - older_than
+        async with self._session_maker() as session:
+            stmt = delete(self.table).where(self.table.c.created_at < cutoff_time)
+            result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount  # type: ignore
+
+    async def __call__(self) -> None:
+        """Initialize the poller by creating the table if needed."""
+        self.table = create_polling_results_table(self._table_name, registry())
+        async with self._session_maker() as session:
+            await session.run_sync(lambda s: self.table.create(s.get_bind(), checkfirst=True))

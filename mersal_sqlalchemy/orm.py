@@ -1,9 +1,11 @@
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    DateTime,
     Identity,
     Integer,
     LargeBinary,
@@ -17,6 +19,7 @@ from sqlalchemy.types import JSON
 
 __all__ = (
     "create_outbox_table_and_map",
+    "create_polling_results_table",
     "create_sagas_table",
 )
 
@@ -68,6 +71,31 @@ def create_sagas_table(table_name: str, mapper_registry: registry) -> Table:
             Column("revision", Integer, nullable=False),
             Column("data", JsonB, nullable=False),
             Column("saga_type", String, nullable=False),
+        )
+
+    return table
+
+
+def create_polling_results_table(table_name: str, mapper_registry: registry) -> Table:
+    metadata = mapper_registry.metadata
+    table: Table | None = None
+    for _table in metadata.sorted_tables:
+        if _table.name == table_name:
+            table = _table
+            break
+    if table is None:
+        table = Table(
+            table_name,
+            metadata,
+            Column("message_id", String, primary_key=True),
+            Column("data", JsonB, nullable=True),
+            Column("problem", JsonB, nullable=True),
+            Column(
+                "created_at",
+                DateTime(timezone=True),
+                nullable=False,
+                default=lambda: datetime.now(timezone.utc),
+            ),
         )
 
     return table

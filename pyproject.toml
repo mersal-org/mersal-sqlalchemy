@@ -7,7 +7,8 @@ authors = [
 ]
 dependencies = [
     "mersal",
-    "sqlalchemy"
+    "sqlalchemy",
+    "mersal-polling @ https://github.com/mersal-org/mersal-polling.git",
 ]
 readme = "README.rst"
 requires-python = ">= 3.10"
