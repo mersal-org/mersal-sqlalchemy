@@ -88,6 +88,7 @@ def create_polling_results_table(table_name: str, mapper_registry: registry) -> 
             table_name,
             metadata,
             Column("message_id", String, primary_key=True),
+            Column("status", String, nullable=False),
             Column("data", JsonB, nullable=True),
             Column("problem", JsonB, nullable=True),
             Column(
