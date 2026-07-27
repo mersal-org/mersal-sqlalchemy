@@ -96,6 +96,7 @@ class DockerServiceRegistry:
         **kwargs: Any,
     ) -> None:
         if name not in self._running_services:
+            self.run_command("down", name)
             self.run_command("up", "-d", name)
             self._running_services.add(name)
 
