@@ -601,10 +601,14 @@ wheels = [
 
 [[package]]
 name = "mersal"
-version = "0.0.2.dev49"
-source = { git = "https://github.com/mersal-org/mersal.git#f876b841cab5233281bef6c12b397768bd411b54" }
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/78/2050c663e5288fc63ed4d20edd323ea65f00f94069470be72ca4edb105ad/mersal-0.3.0.tar.gz", hash = "sha256:b17690e5fbbd5521155b34aeaf76fb0f9bb5a5f9f89e9ba34d41307002f0aa19", size = 298619, upload-time = "2026-07-27T08:04:48.843Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/ae/5f36fea047d9232aa63ca327430a550653b84a44a416a5227397816c63c4/mersal-0.3.0-py3-none-any.whl", hash = "sha256:38824b2d0c451df345e5b0226330e110f73738a11565bd70dc6da54123baeac5", size = 121228, upload-time = "2026-07-27T08:04:47.261Z" },
 ]
 
 [[package]]
@@ -622,10 +626,14 @@ wheels = [
 
 [[package]]
 name = "mersal-polling"
-version = "0.0.1.dev12"
-source = { git = "https://github.com/mersal-org/mersal-polling.git#724a0437184177b1a5f674d41ee08fb7374b48a4" }
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mersal" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/31/4c/21a8b0bcb549ab4c91e143498516851d00b4df5f8f83e6953ccab9dd70c1/mersal_polling-0.3.0.tar.gz", hash = "sha256:33ac34f19e9bc93e157fba629eff1f6488d693e7e2f744fb4b8462087992abcd", size = 90083, upload-time = "2026-07-27T08:25:08.471Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/a8/7f64dc50a73ee1e0ee706c26ea98aa9c8546c9f7f66cf84579f5996b31a2/mersal_polling-0.3.0-py3-none-any.whl", hash = "sha256:09f66263f6f97295f04f3fb2230e5fbb39f1844851228a3e9d0e5e68e980170a", size = 15222, upload-time = "2026-07-27T08:25:07.367Z" },
 ]
 
 [[package]]
@@ -684,7 +692,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "mersal" },
-    { name = "mersal-polling", git = "https://github.com/mersal-org/mersal-polling.git" },
+    { name = "mersal-polling" },
     { name = "sqlalchemy" },
 ]
 
