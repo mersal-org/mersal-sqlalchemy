@@ -1,15 +1,12 @@
-
-version: "3"
-
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:18
     ports:
       - "5423:5432" # use a non-standard port here
     environment:
       POSTGRES_PASSWORD: super-secret
     volumes:
-      - pg_testing_data:/var/lib/postgresql/data
+      - pg_testing_data:/var/lib/postgresql
 volumes:
   pg_testing_data:
     driver_opts:
