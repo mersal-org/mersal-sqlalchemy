@@ -61,7 +61,7 @@ def build(output_dir: str, version: str | None) -> None:
     else:
         os.environ["_MERSAL_DOCS_BUILD_VERSION"] = version
 
-    subprocess.run(["make", "docs"], check=True)
+    subprocess.run(["mise", "run", "docs"], check=True)
 
     Path(output_dir).mkdir(exist_ok=True, parents=True)
     Path(output_dir).joinpath(".nojekyll").touch(exist_ok=True)
