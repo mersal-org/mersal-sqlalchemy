@@ -86,6 +86,20 @@ class DockerServiceRegistry:
     def run_command(self, *args: str) -> None:
         subprocess.run([*self._base_command, *args], check=True, capture_output=True)
 
+    def _capture_command(self, *args: str) -> str:
+        result = subprocess.run(
+            [*self._base_command, *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout + result.stderr
+
+    def _diagnostics(self, name: str) -> str:
+        ps_output = self._capture_command("ps", "-a")
+        logs_output = self._capture_command("logs", name)
+        return f"docker compose ps -a:\n{ps_output}\ndocker compose logs {name}:\n{logs_output}"
+
     async def start(
         self,
         name: str,
@@ -100,16 +114,16 @@ class DockerServiceRegistry:
             self.run_command("up", "-d", name)
             self._running_services.add(name)
 
-            # asyncio.run(
-            #     wait_until_responsive(
-            #         **kwargs,
-            await wait_until_responsive(
-                check=AsyncCallable(check),
-                timeout=timeout,
-                pause=pause,
-                host=self.docker_ip,
-                **kwargs,
-            )
+            try:
+                await wait_until_responsive(
+                    check=AsyncCallable(check),
+                    timeout=timeout,
+                    pause=pause,
+                    host=self.docker_ip,
+                    **kwargs,
+                )
+            except TimeoutError as e:
+                raise TimeoutError(f"{e}\n\n{self._diagnostics(name)}") from e
 
     def stop(self, name: str) -> None:
         pass
