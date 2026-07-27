@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import MergedResult, delete, select, update
 from sqlalchemy.orm import registry
 from sqlalchemy.sql import insert
 
@@ -133,11 +133,14 @@ class SQLAlchemySagaStorage(SagaStorage):
 
     async def _execute_update(self, saga_data: SagaData, session: AsyncSession) -> None:
         data = self._convert_to_json_compatible(saga_data.data)
-        result = await session.execute(
-            update(self._table)
-            .where(self._table.c.id == saga_data.id)
-            .where(self._table.c.revision == saga_data.revision)
-            .values(revision=saga_data.revision + 1, data=data),
+        result = cast(
+            MergedResult,
+            await session.execute(
+                update(self._table)
+                .where(self._table.c.id == saga_data.id)
+                .where(self._table.c.revision == saga_data.revision)
+                .values(revision=saga_data.revision + 1, data=data),
+            ),
         )
         if not result.rowcount:
             raise ConcurrencyExceptionError()

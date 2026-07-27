@@ -32,6 +32,10 @@ __all__ = (
 )
 
 
+class TimeoutError(Exception):
+    """Service response timed out."""
+
+
 async def wait_until_responsive(
     check: Callable[..., Awaitable],
     timeout: float,
@@ -54,7 +58,7 @@ async def wait_until_responsive(
         await asyncio.sleep(pause)
         now = timeit.default_timer()
 
-    raise Exception("Timeout reached while waiting on service!")
+    raise TimeoutError("Timeout reached while waiting on service!")
 
 
 class DockerServiceRegistry:
@@ -80,7 +84,7 @@ class DockerServiceRegistry:
         return match.group(1)
 
     def run_command(self, *args: str) -> None:
-        subprocess.run([*self._base_command, *args], check=True, capture_output=True)  # noqa: S603
+        subprocess.run([*self._base_command, *args], check=True, capture_output=True)
 
     async def start(
         self,
@@ -132,7 +136,7 @@ async def postgres_responsive(host: str) -> bool:
             port=5423,
             user="postgres",
             database="postgres",
-            password="super-secret",  # noqa: S106
+            password="super-secret",
         )
     except (ConnectionError, asyncpg.CannotConnectNowError):
         return False
@@ -154,7 +158,7 @@ def fx_db_config(docker_ip: str) -> dict:
         "url": URL(
             drivername="postgresql+asyncpg",
             username="postgres",
-            password="super-secret",  # noqa: S106
+            password="super-secret",
             host=docker_ip,
             port=5423,
             database="postgres",

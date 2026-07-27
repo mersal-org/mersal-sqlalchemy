@@ -3,10 +3,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mersal_polling import Poller, PollingResult, ProblemDetails
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import MergedResult, delete, insert, select, update
 from sqlalchemy.orm import registry
 
 from mersal_sqlalchemy.orm import create_polling_results_table
@@ -180,9 +180,9 @@ class SQLAlchemyPoller(Poller):
         cutoff_time = datetime.now(timezone.utc) - older_than
         async with self._session_maker() as session:
             stmt = delete(self.table).where(self.table.c.created_at < cutoff_time)
-            result = await session.execute(stmt)
+            result = cast(MergedResult, await session.execute(stmt))
             await session.commit()
-            return result.rowcount  # type: ignore
+            return cast(int, result.rowcount)
 
     async def __call__(self) -> None:
         """Initialize the poller by creating the table if needed."""

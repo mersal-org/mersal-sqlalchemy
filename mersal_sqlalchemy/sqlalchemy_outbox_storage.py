@@ -91,7 +91,7 @@ class SQLAlchemyOutboxStorage(OutboxStorage):
     async def get_next_message_batch(self) -> OutboxMessageBatch:
         session = self._session_maker()
         async with session:
-            stmt = select(self.table).where(self.table.c.sent == False)  # noqa: E712
+            stmt = select(self.table).where(self.table.c.sent == False)
             data = (await session.execute(stmt)).all()
             result = [
                 OutboxMessage(

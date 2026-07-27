@@ -155,7 +155,7 @@ class TestSQLAlchemySagaStorage:
         await session.commit()
         await session.close()
 
-        async with session_factory() as session:
+        async with session_factory() as _session:
             data1: SagaData | None = await subject.find_using_id(MyExampleSagaData, saga_data.id)
             assert data1
 
