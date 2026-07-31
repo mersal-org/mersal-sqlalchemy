@@ -64,6 +64,7 @@ linting = [
 ]
 test = [
     "pytest",
+    "pytest-cov",
     "anyio",
     "mersal-msgspec",
 ]
