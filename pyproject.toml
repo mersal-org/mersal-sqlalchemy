@@ -81,7 +81,7 @@ log_cli = true
 
 [tool.ruff]
 include = [
-  "mersal_sqlalchemy/**/*.{py,pyi}",
+  "src/mersal_sqlalchemy/**/*.{py,pyi}",
   "tests/**/*.{py,pyi}",
   "docs/examples/**/*.{py,pyi}",
   "pyproject.toml"
@@ -90,7 +90,7 @@ target-version = "py310"
 line-length = 120
 
 src = [
-  "mersal_sqlalchemy",
+  "src",
 ]
 
 [tool.ruff.format]
@@ -133,7 +133,7 @@ fallback-version = "0.0.0"
 local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mersal_sqlalchemy"]
+packages = ["src/mersal_sqlalchemy"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -166,7 +166,7 @@ warn_unreachable = true
 typeCheckingMode = "standard"
 pythonVersion = "3.11"
 include = [
-  "mersal_sqlalchemy",
+  "src/mersal_sqlalchemy",
   "tests",
 ]
 
@@ -175,5 +175,5 @@ python-version = "3.11"
 
 [tool.ty.src]
 include = [
-  "mersal_sqlalchemy",
+  "src/mersal_sqlalchemy",
 ]
