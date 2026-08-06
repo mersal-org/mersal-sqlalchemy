@@ -3,17 +3,17 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from mersal_polling import ProblemDetails
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from mersal_sqlalchemy import (
+from mersal.polling import ProblemDetails
+from mersal.sqlalchemy import (
     SQLAlchemyPoller,
     SQLAlchemyPollerConfig,
     SQLAlchemyPollerWithCleanup,
     SQLAlchemyPollerWithCleanupConfig,
 )
-from mersal_testing.testing_utils import is_docker_available
+from mersal.testing.core.testing_utils import is_docker_available
 
 __all__ = ("TestSQLAlchemyPoller",)
 

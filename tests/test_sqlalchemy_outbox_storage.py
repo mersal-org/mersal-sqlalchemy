@@ -4,17 +4,17 @@ import pytest
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from mersal.transport import DefaultTransactionContext
-from mersal_msgspec import MsgspecSerializer
-from mersal_sqlalchemy import (
+from mersal.msgspec import MsgspecSerializer
+from mersal.sqlalchemy import (
     SQLAlchemyOutboxStorage,
     SQLAlchemyOutboxStorageConfig,
 )
-from mersal_testing.test_doubles import (
+from mersal.testing.core.test_doubles import (
     OutgoingMessageBuilder,
     TransportMessageBuilder,
 )
-from mersal_testing.testing_utils import is_docker_available
+from mersal.testing.core.testing_utils import is_docker_available
+from mersal.transport import DefaultTransactionContext
 
 __all__ = ("TestSQLAlchemyOutboxStorage",)
 

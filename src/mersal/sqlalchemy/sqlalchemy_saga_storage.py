@@ -3,25 +3,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import MergedResult, delete, select, update
-from sqlalchemy.orm import registry
-from sqlalchemy.sql import insert
-
 from mersal.exceptions.base_exceptions import (
     ConcurrencyExceptionError,
     MersalExceptionError,
 )
 from mersal.sagas import CorrelationProperty, SagaData, SagaStorage
-from mersal_sqlalchemy.orm import create_sagas_table
+from mersal.sqlalchemy.orm import create_sagas_table
+from sqlalchemy import MergedResult, delete, select, update
+from sqlalchemy.orm import registry
+from sqlalchemy.sql import insert
 
 if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable, Sequence
 
+    from mersal.transport import TransactionContext
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
     from sqlalchemy.schema import Table
-
-    from mersal.transport import TransactionContext
 
 __all__ = (
     "SQLAlchemySagaStorage",

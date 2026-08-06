@@ -16,8 +16,8 @@ from sqlalchemy import NullPool, event
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+from mersal.testing.core._internal.conftest import *
 from mersal.utils import AsyncCallable
-from mersal_testing._internal.conftest import *
 
 __all__ = (
     "DockerServiceRegistry",

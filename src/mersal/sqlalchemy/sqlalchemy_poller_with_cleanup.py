@@ -5,10 +5,9 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mersal_polling import PollingResult, ProblemDetails
-    from mersal_polling.poller import PollingStatus
-
-    from mersal_sqlalchemy.sqlalchemy_poller import SQLAlchemyPoller
+    from mersal.polling import PollingResult, ProblemDetails
+    from mersal.polling.poller import PollingStatus
+    from mersal.sqlalchemy.sqlalchemy_poller import SQLAlchemyPoller
 
 __all__ = (
     "SQLAlchemyPollerWithCleanup",

@@ -81,7 +81,7 @@ log_cli = true
 
 [tool.ruff]
 include = [
-  "src/mersal_sqlalchemy/**/*.{py,pyi}",
+  "src/mersal/sqlalchemy/**/*.{py,pyi}",
   "tests/**/*.{py,pyi}",
   "docs/examples/**/*.{py,pyi}",
   "pyproject.toml"
@@ -116,9 +116,6 @@ convention = "google"
 [tool.ruff.lint.isort]
 known-first-party = [
 "mersal",
-"mersal_testing",
-"mersal_sqlalchemy",
-"mersal_msgspec",
 ]
 
 [build-system]
@@ -133,7 +130,8 @@ fallback-version = "0.0.0"
 local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mersal_sqlalchemy"]
+packages = ["src/mersal"]
+dev-mode-dirs = ["src"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -154,7 +152,7 @@ enable_error_code = [
   "redundant-self",
 ]
 packages = [
-  "mersal_sqlalchemy",
+  "mersal.sqlalchemy",
 ]
 disallow_any_generics = false
 local_partial_types = true
@@ -166,7 +164,7 @@ warn_unreachable = true
 typeCheckingMode = "standard"
 pythonVersion = "3.11"
 include = [
-  "src/mersal_sqlalchemy",
+  "src/mersal",
   "tests",
 ]
 
@@ -175,5 +173,5 @@ python-version = "3.11"
 
 [tool.ty.src]
 include = [
-  "src/mersal_sqlalchemy",
+  "src/mersal",
 ]

@@ -1,6 +1,5 @@
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from mersal.pipeline.message_context import MessageContext
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 __all__ = (
     "SQLAlchemyUnitOfWork",

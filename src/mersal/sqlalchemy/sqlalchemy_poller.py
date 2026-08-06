@@ -5,14 +5,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, cast
 
-from mersal_polling import Poller, PollingResult, ProblemDetails
+from mersal.polling import Poller, PollingResult, ProblemDetails
+from mersal.sqlalchemy.orm import create_polling_results_table
 from sqlalchemy import MergedResult, delete, insert, select, update
 from sqlalchemy.orm import registry
 
-from mersal_sqlalchemy.orm import create_polling_results_table
-
 if TYPE_CHECKING:
-    from mersal_polling.poller import PollingStatus
+    from mersal.polling.poller import PollingStatus
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 __all__ = (

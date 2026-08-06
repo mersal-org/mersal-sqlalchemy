@@ -3,20 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import insert, select, update
-from sqlalchemy.orm import registry
-
 from mersal.messages.message_headers import MessageHeaders
 from mersal.outbox import OutboxMessage, OutboxMessageBatch, OutboxStorage
-from mersal_sqlalchemy.orm import create_outbox_table_and_map
+from mersal.sqlalchemy.orm import create_outbox_table_and_map
+from sqlalchemy import insert, select, update
+from sqlalchemy.orm import registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
     from mersal.serialization import MessageHeadersSerializer
     from mersal.transport import OutgoingMessage, TransactionContext
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 __all__ = (
     "SQLAlchemyOutboxStorage",
