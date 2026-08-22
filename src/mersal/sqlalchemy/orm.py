@@ -11,20 +11,39 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Table,
+    inspect,
 )
 from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import registry
+from sqlalchemy.orm import Session, registry
 from sqlalchemy.types import JSON
 
 __all__ = (
     "create_outbox_table_and_map",
     "create_polling_results_table",
     "create_sagas_table",
+    "ensure_table_exists",
 )
 
 
 JsonB = JSON().with_variant(PG_JSONB, "postgresql")
+
+
+def ensure_table_exists(table: Table, sync_session: Session) -> None:
+    """Create ``table`` if it doesn't exist yet, tolerating concurrent creators."""
+    connection = sync_session.connection()
+    if inspect(connection).has_table(table.name, schema=table.schema):
+        return
+
+    savepoint = connection.begin_nested()
+    try:
+        table.create(connection, checkfirst=False)
+    except Exception:
+        savepoint.rollback()
+        if not inspect(connection).has_table(table.name, schema=table.schema):
+            raise
+    else:
+        savepoint.commit()
 
 
 def create_outbox_table_and_map(

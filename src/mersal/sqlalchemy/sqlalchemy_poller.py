@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, cast
 
 from mersal.polling import Poller, PollingResult, ProblemDetails
-from mersal.sqlalchemy.orm import create_polling_results_table
+from mersal.sqlalchemy.orm import create_polling_results_table, ensure_table_exists
 from sqlalchemy import MergedResult, delete, insert, select, update
 from sqlalchemy.orm import registry
 
@@ -187,4 +187,5 @@ class SQLAlchemyPoller(Poller):
         """Initialize the poller by creating the table if needed."""
         self.table = create_polling_results_table(self._table_name, registry())
         async with self._session_maker() as session:
-            await session.run_sync(lambda s: self.table.create(s.get_bind(), checkfirst=True))
+            await session.run_sync(lambda s: ensure_table_exists(self.table, s))
+            await session.commit()

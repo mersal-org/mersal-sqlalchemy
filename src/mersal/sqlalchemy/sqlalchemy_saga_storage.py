@@ -8,7 +8,7 @@ from mersal.exceptions.base_exceptions import (
     MersalExceptionError,
 )
 from mersal.sagas import CorrelationProperty, SagaData, SagaStorage
-from mersal.sqlalchemy.orm import create_sagas_table
+from mersal.sqlalchemy.orm import create_sagas_table, ensure_table_exists
 from sqlalchemy import MergedResult, delete, select, update
 from sqlalchemy.orm import registry
 from sqlalchemy.sql import insert
@@ -55,7 +55,8 @@ class SQLAlchemySagaStorage(SagaStorage):
     async def __call__(self) -> None:
         self._table = create_sagas_table(self._table_name, registry())
         async with self._session_maker() as session:
-            await session.run_sync(lambda s: self._table.create(s.get_bind(), checkfirst=True))
+            await session.run_sync(lambda s: ensure_table_exists(self._table, s))
+            await session.commit()
 
     async def find_using_id(self, saga_data_type: type, message_id: uuid.UUID) -> SagaData | None:
         stmt = select(self._table).where(self._table.c.id == message_id)

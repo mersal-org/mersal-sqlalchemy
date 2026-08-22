@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, cast
 
+import anyio
 import msgspec
 import pytest
 from sqlalchemy import inspect
@@ -94,6 +95,37 @@ class TestSQLAlchemySagaStorage:
         subject = config.storage
         await subject()
         await subject()
+
+        async with db_engine.connect() as conn:
+            tables = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names())
+
+        assert table_name in tables
+
+    async def test_concurrent_table_creation(
+        self,
+        db_engine: AsyncEngine,
+        session_factory: async_sessionmaker[AsyncSession],
+    ):
+        """Many storage instances calling `__call__` at once must not blow up.
+
+        Each gets its own fresh registry/table object (mirroring separate
+        processes starting up concurrently), and `session_factory` is backed
+        by a `NullPool` engine, so each one races on a genuinely separate
+        connection rather than sharing one.
+        """
+        table_name = f"sagas_concurrent_{uuid.uuid4().hex}"
+        subjects = [
+            SQLAlchemySagaStorageConfig(
+                table_name=table_name,
+                async_session_factory=session_factory,
+                session_extractor=lambda tr: cast("AsyncSession", tr.items.get("sqlalchemy-session")),
+            ).storage
+            for _ in range(10)
+        ]
+
+        async with anyio.create_task_group() as tg:
+            for subject in subjects:
+                tg.start_soon(subject)
 
         async with db_engine.connect() as conn:
             tables = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names())

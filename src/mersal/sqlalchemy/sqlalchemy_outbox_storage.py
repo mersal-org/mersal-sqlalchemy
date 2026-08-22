@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from mersal.messages.message_headers import MessageHeaders
 from mersal.outbox import OutboxMessage, OutboxMessageBatch, OutboxStorage
-from mersal.sqlalchemy.orm import create_outbox_table_and_map
+from mersal.sqlalchemy.orm import create_outbox_table_and_map, ensure_table_exists
 from sqlalchemy import insert, select, update
 from sqlalchemy.orm import registry
 
@@ -112,7 +112,8 @@ class SQLAlchemyOutboxStorage(OutboxStorage):
     async def __call__(self) -> None:
         self.table = create_outbox_table_and_map(self._table_name, registry())
         async with self._session_maker() as session:
-            await session.run_sync(lambda s: self.table.create(s.get_bind(), checkfirst=True))
+            await session.run_sync(lambda s: ensure_table_exists(self.table, s))
+            await session.commit()
 
     async def _update_messages_sent_status(
         self, outbox_messages: Sequence[OutboxMessage], session: AsyncSession
