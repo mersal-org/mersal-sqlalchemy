@@ -31,7 +31,17 @@ JsonB = JSON().with_variant(PG_JSONB, "postgresql")
 
 def ensure_table_exists(table: Table, sync_session: Session) -> None:
     """Create ``table`` if it doesn't exist yet, tolerating concurrent creators."""
-    connection = sync_session.connection()
+    # A REPEATABLE READ (or SERIALIZABLE) caller freezes this transaction's
+    # snapshot at its first statement. If a concurrent creator wins the race
+    # below, our post-failure `has_table` recheck would still be looking at
+    # the pre-race snapshot and wrongly conclude the table is genuinely
+    # missing, re-raising a race we actually recovered from. Forcing READ
+    # COMMITTED for this bootstrap-only transaction gives every statement a
+    # fresh snapshot so the recheck can see the winner's commit.
+    execution_options = {}
+    if sync_session.get_bind().dialect.name == "postgresql":
+        execution_options["isolation_level"] = "READ COMMITTED"
+    connection = sync_session.connection(execution_options=execution_options)
     if inspect(connection).has_table(table.name, schema=table.schema):
         return
 

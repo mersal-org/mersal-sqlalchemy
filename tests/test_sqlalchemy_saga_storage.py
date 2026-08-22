@@ -6,7 +6,8 @@ import anyio
 import msgspec
 import pytest
 from sqlalchemy import inspect
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from mersal.exceptions.base_exceptions import (
     ConcurrencyExceptionError,
@@ -131,6 +132,44 @@ class TestSQLAlchemySagaStorage:
             tables = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names())
 
         assert table_name in tables
+
+    async def test_concurrent_table_creation_under_repeatable_read(
+        self,
+        db_config: dict,
+    ):
+        """Same race as `test_concurrent_table_creation`, but with the engine
+        pinned to REPEATABLE READ.
+
+        Under REPEATABLE READ a transaction's snapshot is frozen at its
+        first statement, so a naive "catch the create failure, recheck
+        has_table" recovery would keep looking at data from before the
+        race was decided and wrongly conclude the table is still missing.
+        `ensure_table_exists` works around this by forcing READ COMMITTED
+        for its own bootstrap transaction; this test pins the engine so a
+        regression there shows up even though every other test in this
+        file runs at the driver's default isolation level.
+        """
+        engine = create_async_engine(**{**db_config, "poolclass": NullPool, "isolation_level": "REPEATABLE READ"})
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        table_name = f"sagas_rr_{uuid.uuid4().hex}"
+        subjects = [
+            SQLAlchemySagaStorageConfig(
+                table_name=table_name,
+                async_session_factory=session_factory,
+                session_extractor=lambda tr: cast("AsyncSession", tr.items.get("sqlalchemy-session")),
+            ).storage
+            for _ in range(15)
+        ]
+
+        async with anyio.create_task_group() as tg:
+            for subject in subjects:
+                tg.start_soon(subject)
+
+        async with engine.connect() as conn:
+            tables = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names())
+
+        assert table_name in tables
+        await engine.dispose()
 
     async def test_insert(
         self,
