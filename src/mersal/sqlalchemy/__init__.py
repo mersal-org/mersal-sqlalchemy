@@ -7,6 +7,8 @@ __all__ = [
     "SQLAlchemyOutboxStorageConfig",
     "SQLAlchemyPoller",
     "SQLAlchemyPollerConfig",
+    "SQLAlchemyPollerPlugin",
+    "SQLAlchemyPollerPluginConfig",
     "SQLAlchemyPollerWithCleanup",
     "SQLAlchemyPollerWithCleanupConfig",
     "SQLAlchemySagaStorage",
@@ -17,6 +19,7 @@ __all__ = [
     "default_sqlalchemy_rollback_action",
 ]
 
+from .plugin import SQLAlchemyPollerPlugin, SQLAlchemyPollerPluginConfig
 from .sqlalchemy_outbox_storage import (
     SQLAlchemyOutboxStorage,
     SQLAlchemyOutboxStorageConfig,

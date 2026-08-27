@@ -21,9 +21,9 @@ class SQLAlchemyPollerWithCleanupConfig:
 
     poller: SQLAlchemyPoller
     """The underlying SQLAlchemy poller."""
-    cleanup_interval: timedelta
+    cleanup_interval: timedelta = timedelta(minutes=30)
     """How often to run cleanup (default: 30 minutes)."""
-    cleanup_older_than: timedelta
+    cleanup_older_than: timedelta = timedelta(minutes=30)
     """Delete results older than this (default: 30 minutes)."""
 
     @property
@@ -112,6 +112,10 @@ class SQLAlchemyPollerWithCleanup:
             data=data,
             problem=problem,
         )
+
+    async def aclose(self) -> None:
+        """Release resources held by the underlying poller."""
+        await self._poller.aclose()
 
     async def _maybe_cleanup(self) -> None:
         """Run cleanup if enough time has passed since the last cleanup."""
