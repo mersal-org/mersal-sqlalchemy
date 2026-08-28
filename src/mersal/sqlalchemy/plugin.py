@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from mersal.lifespan import LifespanHandler
 from mersal.logging import Logger
 from mersal.plugins import Plugin
+from mersal.polling.poller import Poller
 from mersal.sqlalchemy.sqlalchemy_poller import SQLAlchemyPoller, SQLAlchemyPollerConfig
 from mersal.sqlalchemy.sqlalchemy_poller_with_cleanup import (
     SQLAlchemyPollerWithCleanup,
@@ -87,8 +88,7 @@ class SQLAlchemyPollerPlugin(Plugin):
         self._config = config
 
     def __call__(self, configurator: StandardConfigurator) -> None:
-        def decorate(configurator: StandardConfigurator) -> Any:
-            lifespan_handler: LifespanHandler = configurator.get(LifespanHandler)  # type: ignore[type-abstract]
+        def register(configurator: StandardConfigurator) -> Any:
             logger: Logger = configurator.get(Logger)  # type: ignore[type-abstract]
 
             base_poller = SQLAlchemyPoller(
@@ -113,9 +113,16 @@ class SQLAlchemyPollerPlugin(Plugin):
             else:
                 self.poller = base_poller
 
-            lifespan_handler.register_on_startup_hook(base_poller)
-            lifespan_handler.register_on_shutdown_hook(base_poller.aclose)
+            return self.poller
+
+        def decorate(configurator: StandardConfigurator) -> Any:
+            lifespan_handler: LifespanHandler = configurator.get(LifespanHandler)  # type: ignore[type-abstract]
+            poller: SQLAlchemyPoller = configurator.get(Poller)  # type: ignore[type-abstract, invalid-assignment]  # ty: ignore[invalid-assignment]
+
+            lifespan_handler.register_on_startup_hook(poller)
+            lifespan_handler.register_on_shutdown_hook(poller.aclose)
 
             return lifespan_handler
 
+        configurator.register(Poller, register)
         configurator.decorate(LifespanHandler, decorate)

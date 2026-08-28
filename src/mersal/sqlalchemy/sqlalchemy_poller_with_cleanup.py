@@ -113,6 +113,9 @@ class SQLAlchemyPollerWithCleanup:
             problem=problem,
         )
 
+    async def __call__(self) -> None:
+        await self._poller()
+
     async def aclose(self) -> None:
         """Release resources held by the underlying poller."""
         await self._poller.aclose()
