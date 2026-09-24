@@ -208,8 +208,8 @@ def _sqla_on_connect(dbapi_connection: Any, _: Any) -> Any:  # pragma: no cover
     def decoder(bin_value: bytes) -> Any:
         return msgspec.json.decode(bin_value[1:])
 
-    dbapi_connection.await_(
-        dbapi_connection.driver_connection.set_type_codec(
+    dbapi_connection.run_async(
+        lambda driver_connection: driver_connection.set_type_codec(
             "jsonb",
             encoder=encoder,
             decoder=decoder,
@@ -217,8 +217,8 @@ def _sqla_on_connect(dbapi_connection: Any, _: Any) -> Any:  # pragma: no cover
             format="binary",
         )
     )
-    dbapi_connection.await_(
-        dbapi_connection.driver_connection.set_type_codec(
+    dbapi_connection.run_async(
+        lambda driver_connection: driver_connection.set_type_codec(
             "json",
             encoder=encoder,
             decoder=decoder,

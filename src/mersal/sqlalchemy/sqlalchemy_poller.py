@@ -39,10 +39,31 @@ class SQLAlchemyPollerConfig:
     """Wake up `poll()` via Postgres LISTEN/NOTIFY instead of sleep-based polling.
 
     `None` (default) autodetects: enabled when the bound engine is PostgreSQL, and a
-    plain sleep loop using `poll_interval` otherwise. Force `False` if you're behind a
-    connection pooler in transaction-pooling mode (e.g. PgBouncer), where LISTEN/NOTIFY
-    silently doesn't work because the backend connection can change between statements.
-    Forcing `True` on a non-PostgreSQL engine raises during initialization.
+    plain sleep loop using `poll_interval` otherwise. Forcing `True` on a non-PostgreSQL
+    engine raises during initialization.
+
+    Behind a connection pooler in transaction-pooling mode (e.g. PgBouncer), LISTEN
+    silently doesn't work on the pooled engine because the backend connection can
+    change between statements -- pass a direct (unpooled) `listen_engine` rather than
+    turning this off. NOTIFY itself works fine through such a pooler.
+    """
+    listen_engine: AsyncEngine | None = None
+    """Engine for the dedicated LISTEN connection. Defaults to the engine
+    `async_session_factory` is bound to.
+
+    Only LISTEN needs a connection whose backend never changes. `peek`, `push`,
+    `cleanup` and the NOTIFY `push` sends (delivered when its transaction commits) all
+    work through a transaction-pooling proxy, so `async_session_factory` can stay on
+    the pooled engine while this points at a direct one -- one direct connection per
+    listening poller instead of every polling query bypassing the pooler.
+    """
+    listen: bool = True
+    """Whether this poller LISTENs when LISTEN/NOTIFY is enabled.
+
+    Set `False` in processes that only `push` results and never `poll()` them (e.g. a
+    worker whose results are polled by an API process): `push` still sends NOTIFY, so
+    listening pollers elsewhere wake up immediately, without holding a LISTEN
+    connection here. `poll()` on such a poller falls back to sleep-based polling.
     """
     listen_notify_fallback_interval: float = 5.0
     """When using LISTEN/NOTIFY, how often `poll()` re-checks the database even without
@@ -65,9 +86,12 @@ class SQLAlchemyPoller(Poller):
         self._table_name = config.table_name
         self._poll_interval = config.poll_interval
         self._use_listen_notify_config = config.use_listen_notify
+        self._listen_engine = config.listen_engine
+        self._listen = config.listen
         self._notify_fallback_interval = config.listen_notify_fallback_interval
         self._logger = config.logger or NullLogger()
         self._listener: PostgresNotifyListener | None = None
+        self._notify_channel: str | None = None
 
     async def poll(
         self,
@@ -199,11 +223,11 @@ class SQLAlchemyPoller(Poller):
                     ],
                 )
 
-            if self._listener is not None:
+            if self._notify_channel is not None:
                 # Sent inside this same transaction: Postgres only actually delivers a
                 # NOTIFY if the transaction that issued it commits, so this can never
                 # wake a waiter for a write that gets rolled back.
-                await session.execute(select(func.pg_notify(self._listener.channel, str(message_id))))
+                await session.execute(select(func.pg_notify(self._notify_channel, str(message_id))))
 
             await session.commit()
 
@@ -236,10 +260,17 @@ class SQLAlchemyPoller(Poller):
             raise ValueError("use_listen_notify=True requires a PostgreSQL engine.")
 
         use_listen_notify = is_postgres if self._use_listen_notify_config is None else self._use_listen_notify_config
-        if use_listen_notify and self._listener is None:
+        if not use_listen_notify:
+            return
+
+        self._notify_channel = PostgresNotifyListener.channel_for(self._table_name)
+        if self._listen and self._listener is None:
+            listen_engine = self._listen_engine or cast("AsyncEngine", engine)
+            if listen_engine.dialect.name != "postgresql":
+                raise ValueError("listen_engine must be a PostgreSQL engine.")
             self._listener = PostgresNotifyListener(
-                cast("AsyncEngine", engine),
-                channel=PostgresNotifyListener.channel_for(self._table_name),
+                listen_engine,
+                channel=self._notify_channel,
                 logger=self._logger,
             )
             self._listener.start()

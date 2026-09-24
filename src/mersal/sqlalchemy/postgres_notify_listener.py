@@ -35,9 +35,9 @@ class PostgresNotifyListener:
     immediately instead of on the next sleep tick.
 
     This requires a connection that isn't swapped out mid-session: PgBouncer's
-    transaction pooling mode breaks LISTEN/NOTIFY because the backend connection can
-    change between statements. Pass ``use_listen_notify=False`` in
-    ``SQLAlchemyPollerConfig`` if you're behind one of those.
+    transaction pooling mode breaks LISTEN because the backend connection can
+    change between statements. Behind one of those, pass a direct (unpooled)
+    ``listen_engine`` in ``SQLAlchemyPollerConfig``; NOTIFY itself works through it.
 
     Correctness never depends on this connection being up: if it's not yet connected,
     or it drops and is reconnecting, waiting on ``subscribe()``'s event just times out

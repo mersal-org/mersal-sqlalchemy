@@ -131,3 +131,69 @@ class TestSQLAlchemyPollerPostgresNotify:
         # postgres_engine is Postgres, so this should succeed rather than raise.
         async with _running_poller(config) as subject:
             assert subject._listener is not None
+
+    async def test_listen_false_still_notifies_listening_pollers(self, postgres_engine: AsyncEngine):
+        table_name = f"polling_results_{uuid.uuid4().hex[:8]}"
+        session_factory = async_sessionmaker(postgres_engine, expire_on_commit=False)
+        listening_config = SQLAlchemyPollerConfig(
+            table_name=table_name,
+            async_session_factory=session_factory,
+            listen_notify_fallback_interval=30,
+        )
+        pushing_config = SQLAlchemyPollerConfig(
+            table_name=table_name,
+            async_session_factory=session_factory,
+            listen=False,
+        )
+
+        async with (
+            _running_poller(listening_config) as listening,
+            _running_poller(pushing_config) as pushing,
+            anyio.create_task_group() as tg,
+        ):
+            assert pushing._listener is None
+
+            message_id = uuid.uuid4()
+            data = {"result": "from another process"}
+
+            async def push_after_delay():
+                await anyio.sleep(0.3)
+                await pushing.push(message_id, data=data)
+
+            tg.start_soon(push_after_delay)
+
+            started_at = monotonic()
+            result = await listening.poll(message_id)
+            elapsed = monotonic() - started_at
+
+            assert result.data == data
+            assert elapsed < 5
+
+    async def test_listens_on_listen_engine_when_given(self, postgres_engine: AsyncEngine):
+        listen_engine = create_async_engine(postgres_engine.url)
+        config = SQLAlchemyPollerConfig(
+            table_name=f"polling_results_{uuid.uuid4().hex[:8]}",
+            async_session_factory=async_sessionmaker(postgres_engine, expire_on_commit=False),
+            listen_engine=listen_engine,
+            listen_notify_fallback_interval=30,
+        )
+
+        try:
+            async with _running_poller(config) as subject, anyio.create_task_group() as tg:
+                assert subject._listener is not None
+                assert subject._listener._engine is listen_engine
+
+                message_id = uuid.uuid4()
+
+                async def push_after_delay():
+                    await anyio.sleep(0.3)
+                    await subject.push(message_id)
+
+                tg.start_soon(push_after_delay)
+
+                started_at = monotonic()
+                await subject.poll(message_id)
+
+                assert monotonic() - started_at < 5
+        finally:
+            await listen_engine.dispose()

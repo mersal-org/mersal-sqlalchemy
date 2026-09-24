@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mersal.lifespan import LifespanHandler
 from mersal.logging import Logger
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from datetime import timedelta
 
     from mersal.configuration import StandardConfigurator
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 __all__ = (
     "SQLAlchemyPollerPlugin",
@@ -39,11 +39,16 @@ class SQLAlchemyPollerPluginConfig:
     """Wake up `poll()` via Postgres LISTEN/NOTIFY instead of sleep-based polling.
 
     `None` (default) autodetects: enabled when the bound engine is PostgreSQL, and a
-    plain sleep loop using `poll_interval` otherwise. Force `False` if you're behind a
-    connection pooler in transaction-pooling mode (e.g. PgBouncer), where LISTEN/NOTIFY
-    silently doesn't work because the backend connection can change between statements.
-    Forcing `True` on a non-PostgreSQL engine raises during initialization.
+    plain sleep loop using `poll_interval` otherwise. Forcing `True` on a non-PostgreSQL
+    engine raises during initialization. Behind a transaction-pooling proxy (e.g.
+    PgBouncer), pass a direct `listen_engine` rather than turning this off.
     """
+    listen_engine: AsyncEngine | None = None
+    """Engine for the dedicated LISTEN connection; defaults to the engine
+    `async_session_factory` is bound to. See `SQLAlchemyPollerConfig.listen_engine`."""
+    listen: bool = True
+    """Whether this app's poller LISTENs; `False` for push-only processes, which still
+    send NOTIFY. See `SQLAlchemyPollerConfig.listen`."""
     listen_notify_fallback_interval: float = 5.0
     """When using LISTEN/NOTIFY, how often `poll()` re-checks the database even without
     a notification -- a safety net for a dropped or still-reconnecting LISTEN connection."""
@@ -97,6 +102,8 @@ class SQLAlchemyPollerPlugin(Plugin):
                     table_name=self._config.table_name,
                     poll_interval=self._config.poll_interval,
                     use_listen_notify=self._config.use_listen_notify,
+                    listen_engine=self._config.listen_engine,
+                    listen=self._config.listen,
                     listen_notify_fallback_interval=self._config.listen_notify_fallback_interval,
                     logger=logger,
                 )
@@ -117,7 +124,10 @@ class SQLAlchemyPollerPlugin(Plugin):
 
         def decorate(configurator: StandardConfigurator) -> Any:
             lifespan_handler: LifespanHandler = configurator.get(LifespanHandler)  # type: ignore[type-abstract]
-            poller: SQLAlchemyPoller = configurator.get(Poller)  # type: ignore[type-abstract, invalid-assignment]  # ty: ignore[invalid-assignment]
+            poller = cast(
+                "SQLAlchemyPoller | SQLAlchemyPollerWithCleanup",
+                configurator.get(Poller),  # type: ignore[type-abstract]
+            )
 
             lifespan_handler.register_on_startup_hook(poller)
             lifespan_handler.register_on_shutdown_hook(poller.aclose)
