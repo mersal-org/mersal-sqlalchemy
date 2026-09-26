@@ -8,9 +8,8 @@ from mersal.exceptions.base_exceptions import (
     MersalExceptionError,
 )
 from mersal.sagas import CorrelationProperty, SagaData, SagaStorage
-from mersal.sqlalchemy.orm import create_sagas_table, ensure_table_exists
+from mersal.sqlalchemy.orm import create_sagas_table, prepare_table
 from sqlalchemy import MergedResult, delete, select, update
-from sqlalchemy.orm import registry
 from sqlalchemy.sql import insert
 
 if TYPE_CHECKING:
@@ -34,6 +33,16 @@ class SQLAlchemySagaStorageConfig:
     session_extractor: Callable[[TransactionContext], AsyncSession]
     to_json_compatible: Callable[[Any], Any] | None = None
     from_json: Callable[[Any, type], Any] | None = None
+    schema: str | None = None
+    """Schema the table lives in. Defaults to the connection's default schema (``search_path``)."""
+    auto_create_table: bool = True
+    """Create the table on startup if it doesn't exist.
+
+    Set to False when tables are managed by migrations (e.g. with a separate migration role
+    that owns the schema); startup then only checks that the table exists and raises
+    `MissingTableError` if it doesn't. See `mersal.sqlalchemy.orm` for adding the table to
+    your app's ``MetaData`` so Alembic autogenerate detects it.
+    """
 
     @property
     def storage(self) -> SQLAlchemySagaStorage:
@@ -47,15 +56,17 @@ class SQLAlchemySagaStorage(SagaStorage):
     ) -> None:
         self._session_maker = config.async_session_factory
         self._table_name = config.table_name
+        self._schema = config.schema
+        self._auto_create_table = config.auto_create_table
         self._session_extractor = config.session_extractor
         self._to_json_compatible = config.to_json_compatible
         self._from_json = config.from_json
         self._table: Table
 
     async def __call__(self) -> None:
-        self._table = create_sagas_table(self._table_name, registry())
+        self._table = create_sagas_table(self._table_name, schema=self._schema)
         async with self._session_maker() as session:
-            await session.run_sync(lambda s: ensure_table_exists(self._table, s))
+            await session.run_sync(lambda s: prepare_table(self._table, s, auto_create=self._auto_create_table))
             await session.commit()
 
     async def find_using_id(self, saga_data_type: type, message_id: uuid.UUID) -> SagaData | None:

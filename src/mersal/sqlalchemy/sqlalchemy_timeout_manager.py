@@ -7,10 +7,9 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from mersal.messages import MessageHeaders, TransportMessage
-from mersal.sqlalchemy.orm import create_timeouts_table, ensure_table_exists
+from mersal.sqlalchemy.orm import create_timeouts_table, prepare_table
 from mersal.timeouts import DueMessage, TimeoutManager
 from sqlalchemy import delete, insert, select
-from sqlalchemy.orm import registry
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Sequence
@@ -34,6 +33,16 @@ class SQLAlchemyTimeoutManagerConfig:
     "Timeouts table name."
     batch_size: int = 100
     "Maximum number of due messages fetched per check."
+    schema: str | None = None
+    """Schema the table lives in. Defaults to the connection's default schema (``search_path``)."""
+    auto_create_table: bool = True
+    """Create the table on startup if it doesn't exist.
+
+    Set to False when tables are managed by migrations (e.g. with a separate migration role
+    that owns the schema); startup then only checks that the table exists and raises
+    `MissingTableError` if it doesn't. See `mersal.sqlalchemy.orm` for adding the table to
+    your app's ``MetaData`` so Alembic autogenerate detects it.
+    """
 
     @property
     def storage(self) -> SQLAlchemyTimeoutManager:
@@ -59,12 +68,14 @@ class SQLAlchemyTimeoutManager(TimeoutManager):
         self._session_maker = config.async_session_factory
         self._table_name = config.table_name
         self._batch_size = config.batch_size
+        self._schema = config.schema
+        self._auto_create_table = config.auto_create_table
         self._table: Table | None = None
 
     async def __call__(self) -> None:
-        table = create_timeouts_table(self._table_name, registry())
+        table = create_timeouts_table(self._table_name, schema=self._schema)
         async with self._session_maker() as session:
-            await session.run_sync(lambda s: ensure_table_exists(table, s))
+            await session.run_sync(lambda s: prepare_table(table, s, auto_create=self._auto_create_table))
             await session.commit()
         self._table = table
 

@@ -33,6 +33,10 @@ class SQLAlchemyPollerPluginConfig:
     """Session factory used to create sessions for polling operations."""
     table_name: str
     """Polling results table name."""
+    schema: str | None = None
+    """Schema the table lives in. See `SQLAlchemyPollerConfig.schema`."""
+    auto_create_table: bool = True
+    """Create the table on startup if it doesn't exist. See `SQLAlchemyPollerConfig.auto_create_table`."""
     poll_interval: float = 0.1
     """Interval in seconds between poll checks when not using LISTEN/NOTIFY (default: 0.1)."""
     use_listen_notify: bool | None = None
@@ -100,6 +104,8 @@ class SQLAlchemyPollerPlugin(Plugin):
                 SQLAlchemyPollerConfig(
                     async_session_factory=self._config.async_session_factory,
                     table_name=self._config.table_name,
+                    schema=self._config.schema,
+                    auto_create_table=self._config.auto_create_table,
                     poll_interval=self._config.poll_interval,
                     use_listen_notify=self._config.use_listen_notify,
                     listen_engine=self._config.listen_engine,

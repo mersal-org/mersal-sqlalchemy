@@ -9,10 +9,9 @@ import anyio
 
 from mersal.logging import NullLogger
 from mersal.polling import Poller, PollingResult, ProblemDetails
-from mersal.sqlalchemy.orm import create_polling_results_table, ensure_table_exists
+from mersal.sqlalchemy.orm import create_polling_results_table, prepare_table
 from mersal.sqlalchemy.postgres_notify_listener import PostgresNotifyListener
 from sqlalchemy import MergedResult, delete, func, insert, select, update
-from sqlalchemy.orm import registry
 
 if TYPE_CHECKING:
     from mersal.logging import Logger
@@ -33,6 +32,16 @@ class SQLAlchemyPollerConfig:
     """Session factory used to create sessions for polling operations."""
     table_name: str
     """Polling results table name."""
+    schema: str | None = None
+    """Schema the table lives in. Defaults to the connection's default schema (``search_path``)."""
+    auto_create_table: bool = True
+    """Create the table on startup if it doesn't exist.
+
+    Set to False when tables are managed by migrations (e.g. with a separate migration role
+    that owns the schema); startup then only checks that the table exists and raises
+    `MissingTableError` if it doesn't. See `mersal.sqlalchemy.orm` for adding the table to
+    your app's ``MetaData`` so Alembic autogenerate detects it.
+    """
     poll_interval: float = 0.1
     """Interval in seconds between poll checks when not using LISTEN/NOTIFY (default: 0.1)."""
     use_listen_notify: bool | None = None
@@ -84,6 +93,8 @@ class SQLAlchemyPoller(Poller):
     ) -> None:
         self._session_maker = config.async_session_factory
         self._table_name = config.table_name
+        self._schema = config.schema
+        self._auto_create_table = config.auto_create_table
         self._poll_interval = config.poll_interval
         self._use_listen_notify_config = config.use_listen_notify
         self._listen_engine = config.listen_engine
@@ -248,10 +259,10 @@ class SQLAlchemyPoller(Poller):
             return cast(int, result.rowcount)
 
     async def __call__(self) -> None:
-        """Initialize the poller by creating the table if needed."""
-        self.table = create_polling_results_table(self._table_name, registry())
+        """Initialize the poller, creating the table if needed and allowed."""
+        self.table = create_polling_results_table(self._table_name, schema=self._schema)
         async with self._session_maker() as session:
-            await session.run_sync(lambda s: ensure_table_exists(self.table, s))
+            await session.run_sync(lambda s: prepare_table(self.table, s, auto_create=self._auto_create_table))
             await session.commit()
             engine = session.bind
 
@@ -263,7 +274,7 @@ class SQLAlchemyPoller(Poller):
         if not use_listen_notify:
             return
 
-        self._notify_channel = PostgresNotifyListener.channel_for(self._table_name)
+        self._notify_channel = PostgresNotifyListener.channel_for(self.table.fullname)
         if self._listen and self._listener is None:
             listen_engine = self._listen_engine or cast("AsyncEngine", engine)
             if listen_engine.dialect.name != "postgresql":

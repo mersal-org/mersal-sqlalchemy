@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING
 
 from mersal.messages.message_headers import MessageHeaders
 from mersal.outbox import OutboxMessage, OutboxMessageBatch, OutboxStorage
-from mersal.sqlalchemy.orm import create_outbox_table_and_map, ensure_table_exists
+from mersal.sqlalchemy.orm import create_outbox_table_and_map, prepare_table
 from sqlalchemy import insert, select, update
-from sqlalchemy.orm import registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -46,6 +45,16 @@ class SQLAlchemyOutboxStorageConfig:
 
     This only applies if the session is also being committed.
     """
+    schema: str | None = None
+    """Schema the table lives in. Defaults to the connection's default schema (``search_path``)."""
+    auto_create_table: bool = True
+    """Create the table on startup if it doesn't exist.
+
+    Set to False when tables are managed by migrations (e.g. with a separate migration role
+    that owns the schema); startup then only checks that the table exists and raises
+    `MissingTableError` if it doesn't. See `mersal.sqlalchemy.orm` for adding the table to
+    your app's ``MetaData`` so Alembic autogenerate detects it.
+    """
 
     @property
     def storage(self) -> SQLAlchemyOutboxStorage:
@@ -59,6 +68,8 @@ class SQLAlchemyOutboxStorage(OutboxStorage):
     ) -> None:
         self._session_maker = config.async_session_factory
         self._table_name = config.table_name
+        self._schema = config.schema
+        self._auto_create_table = config.auto_create_table
         self._session_extractor = config.session_extractor
         self._commit_on_save = config.commit_on_save
         self._close_session_on_save = config.close_session_on_save
@@ -110,9 +121,9 @@ class SQLAlchemyOutboxStorage(OutboxStorage):
             return OutboxMessageBatch(result, completion, close)
 
     async def __call__(self) -> None:
-        self.table = create_outbox_table_and_map(self._table_name, registry())
+        self.table = create_outbox_table_and_map(self._table_name, schema=self._schema)
         async with self._session_maker() as session:
-            await session.run_sync(lambda s: ensure_table_exists(self.table, s))
+            await session.run_sync(lambda s: prepare_table(self.table, s, auto_create=self._auto_create_table))
             await session.commit()
 
     async def _update_messages_sent_status(

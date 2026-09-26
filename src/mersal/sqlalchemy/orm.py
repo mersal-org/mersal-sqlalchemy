@@ -10,25 +10,61 @@ from sqlalchemy import (
     Index,
     Integer,
     LargeBinary,
+    MetaData,
     String,
     Table,
     inspect,
 )
 from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Session, registry
+from sqlalchemy.orm import Session
 from sqlalchemy.types import JSON
 
 __all__ = (
+    "MissingTableError",
     "create_outbox_table_and_map",
     "create_polling_results_table",
     "create_sagas_table",
     "create_timeouts_table",
     "ensure_table_exists",
+    "prepare_table",
+    "verify_table_exists",
 )
 
 
 JsonB = JSON().with_variant(PG_JSONB, "postgresql")
+
+
+class MissingTableError(RuntimeError):
+    """Raised on startup when ``auto_create_table`` is off and the table doesn't exist."""
+
+    def __init__(self, table: Table) -> None:
+        super().__init__(
+            f"Table {table.fullname!r} does not exist and auto_create_table is disabled. "
+            "Create it through your migrations (the table builders in mersal.sqlalchemy.orm "
+            "can add it to your app's MetaData so Alembic autogenerate picks it up), "
+            "or enable auto_create_table."
+        )
+        self.table = table
+
+
+def prepare_table(table: Table, sync_session: Session, *, auto_create: bool) -> None:
+    """Create ``table`` if ``auto_create`` is set, otherwise only check it exists."""
+    if auto_create:
+        ensure_table_exists(table, sync_session)
+    else:
+        verify_table_exists(table, sync_session)
+
+
+def verify_table_exists(table: Table, sync_session: Session) -> None:
+    """Raise `MissingTableError` if ``table`` doesn't exist. Never issues DDL."""
+    if not inspect(sync_session.connection()).has_table(table.name, schema=table.schema):
+        raise MissingTableError(table)
+
+
+def _existing_table(metadata: MetaData, table_name: str, schema: str | None) -> Table | None:
+    schema = schema or metadata.schema
+    return metadata.tables.get(f"{schema}.{table_name}" if schema else table_name)
 
 
 def ensure_table_exists(table: Table, sync_session: Session) -> None:
@@ -60,14 +96,17 @@ def ensure_table_exists(table: Table, sync_session: Session) -> None:
 
 def create_outbox_table_and_map(
     table_name: str,
-    mapper_registry: registry,
+    metadata: MetaData | None = None,
+    schema: str | None = None,
 ) -> Table:
-    metadata = mapper_registry.metadata
-    table: Table | None = None
-    for _table in metadata.sorted_tables:
-        if _table.name == table_name:
-            table = _table
-            break
+    """Define the outbox table on ``metadata`` (a fresh one if omitted), or return it if already defined.
+
+    Pass your app's ``MetaData`` to include the table in Alembic autogenerate. As with
+    any ``Table``, ``schema=None`` falls back to the metadata's own default schema, so
+    pass ``schema`` explicitly when the table lives elsewhere (e.g. ``"public"``).
+    """
+    metadata = MetaData() if metadata is None else metadata
+    table = _existing_table(metadata, table_name, schema)
     if table is None:
         table = Table(
             table_name,
@@ -82,18 +121,25 @@ def create_outbox_table_and_map(
             Column("body", LargeBinary, nullable=False),
             Column("headers", LargeBinary, nullable=False),
             Column("sent", Boolean, nullable=False, default=False),
+            schema=schema,
         )
 
     return table
 
 
-def create_sagas_table(table_name: str, mapper_registry: registry) -> Table:
-    metadata = mapper_registry.metadata
-    table: Table | None = None
-    for _table in metadata.sorted_tables:
-        if _table.name == table_name:
-            table = _table
-            break
+def create_sagas_table(
+    table_name: str,
+    metadata: MetaData | None = None,
+    schema: str | None = None,
+) -> Table:
+    """Define the saga storage table on ``metadata`` (a fresh one if omitted), or return it if already defined.
+
+    Pass your app's ``MetaData`` to include the table in Alembic autogenerate. As with
+    any ``Table``, ``schema=None`` falls back to the metadata's own default schema, so
+    pass ``schema`` explicitly when the table lives elsewhere (e.g. ``"public"``).
+    """
+    metadata = MetaData() if metadata is None else metadata
+    table = _existing_table(metadata, table_name, schema)
     if table is None:
         table = Table(
             table_name,
@@ -102,18 +148,25 @@ def create_sagas_table(table_name: str, mapper_registry: registry) -> Table:
             Column("revision", Integer, nullable=False),
             Column("data", JsonB, nullable=False),
             Column("saga_type", String, nullable=False),
+            schema=schema,
         )
 
     return table
 
 
-def create_polling_results_table(table_name: str, mapper_registry: registry) -> Table:
-    metadata = mapper_registry.metadata
-    table: Table | None = None
-    for _table in metadata.sorted_tables:
-        if _table.name == table_name:
-            table = _table
-            break
+def create_polling_results_table(
+    table_name: str,
+    metadata: MetaData | None = None,
+    schema: str | None = None,
+) -> Table:
+    """Define the polling results table on ``metadata`` (a fresh one if omitted), or return it if already defined.
+
+    Pass your app's ``MetaData`` to include the table in Alembic autogenerate. As with
+    any ``Table``, ``schema=None`` falls back to the metadata's own default schema, so
+    pass ``schema`` explicitly when the table lives elsewhere (e.g. ``"public"``).
+    """
+    metadata = MetaData() if metadata is None else metadata
+    table = _existing_table(metadata, table_name, schema)
     if table is None:
         table = Table(
             table_name,
@@ -128,18 +181,25 @@ def create_polling_results_table(table_name: str, mapper_registry: registry) -> 
                 nullable=False,
                 default=lambda: datetime.now(timezone.utc),
             ),
+            schema=schema,
         )
 
     return table
 
 
-def create_timeouts_table(table_name: str, mapper_registry: registry) -> Table:
-    metadata = mapper_registry.metadata
-    table: Table | None = None
-    for _table in metadata.sorted_tables:
-        if _table.name == table_name:
-            table = _table
-            break
+def create_timeouts_table(
+    table_name: str,
+    metadata: MetaData | None = None,
+    schema: str | None = None,
+) -> Table:
+    """Define the timeouts table on ``metadata`` (a fresh one if omitted), or return it if already defined.
+
+    Pass your app's ``MetaData`` to include the table in Alembic autogenerate. As with
+    any ``Table``, ``schema=None`` falls back to the metadata's own default schema, so
+    pass ``schema`` explicitly when the table lives elsewhere (e.g. ``"public"``).
+    """
+    metadata = MetaData() if metadata is None else metadata
+    table = _existing_table(metadata, table_name, schema)
     if table is None:
         table = Table(
             table_name,
@@ -154,6 +214,7 @@ def create_timeouts_table(table_name: str, mapper_registry: registry) -> Table:
             Column("headers", JsonB, nullable=False),
             Column("body", LargeBinary, nullable=False),
             Index(f"ix_{table_name}_due_time", "due_time"),
+            schema=schema,
         )
 
     return table
