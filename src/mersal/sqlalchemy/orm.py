@@ -7,6 +7,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Identity,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -22,6 +23,7 @@ __all__ = (
     "create_outbox_table_and_map",
     "create_polling_results_table",
     "create_sagas_table",
+    "create_timeouts_table",
     "ensure_table_exists",
 )
 
@@ -126,6 +128,32 @@ def create_polling_results_table(table_name: str, mapper_registry: registry) -> 
                 nullable=False,
                 default=lambda: datetime.now(timezone.utc),
             ),
+        )
+
+    return table
+
+
+def create_timeouts_table(table_name: str, mapper_registry: registry) -> Table:
+    metadata = mapper_registry.metadata
+    table: Table | None = None
+    for _table in metadata.sorted_tables:
+        if _table.name == table_name:
+            table = _table
+            break
+    if table is None:
+        table = Table(
+            table_name,
+            metadata,
+            Column(
+                "id",
+                BigInteger().with_variant(Integer, "sqlite"),
+                Identity(always=True, start=1),
+                primary_key=True,
+            ),
+            Column("due_time", DateTime(timezone=True), nullable=False),
+            Column("headers", JsonB, nullable=False),
+            Column("body", LargeBinary, nullable=False),
+            Index(f"ix_{table_name}_due_time", "due_time"),
         )
 
     return table
