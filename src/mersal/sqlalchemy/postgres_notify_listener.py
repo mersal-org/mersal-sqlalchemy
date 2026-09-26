@@ -10,7 +10,7 @@ import anyio
 from mersal.logging import NullLogger
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
     from mersal.logging import Logger
     from sqlalchemy.ext.asyncio import AsyncEngine
@@ -89,7 +89,7 @@ class PostgresNotifyListener:
         self._task = None
 
     @contextlib.asynccontextmanager
-    async def subscribe(self, message_id: str) -> AsyncIterator[anyio.Event]:
+    async def subscribe(self, message_id: str) -> AsyncGenerator[anyio.Event]:
         """Register interest in ``message_id`` for the duration of the ``with`` block.
 
         Register the waiter *before* checking the database for a result, not after --

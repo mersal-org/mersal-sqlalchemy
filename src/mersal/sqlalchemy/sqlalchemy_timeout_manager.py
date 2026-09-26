@@ -13,7 +13,7 @@ from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import registry
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Sequence
+    from collections.abc import AsyncGenerator, Sequence
 
     from sqlalchemy import Table
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -80,7 +80,7 @@ class SQLAlchemyTimeoutManager(TimeoutManager):
             await session.commit()
 
     @asynccontextmanager
-    async def get_due_messages(self) -> AsyncIterator[Sequence[DueMessage]]:
+    async def get_due_messages(self) -> AsyncGenerator[Sequence[DueMessage]]:
         table = self.table
         async with self._session_maker() as session, session.begin():
             stmt = (
