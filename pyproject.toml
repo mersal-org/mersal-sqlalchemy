@@ -7,7 +7,7 @@ authors = [
 ]
 dependencies = [
     "mersal",
-    "sqlalchemy",
+    "sqlalchemy[asyncio]",
     "mersal-polling",
     "asyncpg",
     "anyio",
