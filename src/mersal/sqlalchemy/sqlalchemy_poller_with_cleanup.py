@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from mersal.polling import PollingResult, ProblemDetails
     from mersal.polling.poller import PollingStatus
     from mersal.sqlalchemy.sqlalchemy_poller import SQLAlchemyPoller
+    from mersal.transport import TransactionContext
 
 __all__ = (
     "SQLAlchemyPollerWithCleanup",
@@ -107,6 +108,26 @@ class SQLAlchemyPollerWithCleanup:
             problem: Structured error information (RFC 7807) for failures
         """
         await self._poller.push(
+            message_id,
+            status=status,
+            data=data,
+            problem=problem,
+        )
+
+    def can_push_in_transaction(self, transaction_context: TransactionContext) -> bool:
+        return self._poller.can_push_in_transaction(transaction_context)
+
+    async def push_in_transaction(
+        self,
+        transaction_context: TransactionContext,
+        message_id: Any,
+        status: PollingStatus = "succeeded",
+        data: dict[str, Any] | None = None,
+        problem: ProblemDetails | None = None,
+    ) -> None:
+        """Delegates to `SQLAlchemyPoller.push_in_transaction`."""
+        await self._poller.push_in_transaction(
+            transaction_context,
             message_id,
             status=status,
             data=data,

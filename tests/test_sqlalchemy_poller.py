@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from mersal.polling import ProblemDetails
+from mersal.polling import ProblemDetails, TransactionalPoller
 from mersal.sqlalchemy import (
     SQLAlchemyPoller,
     SQLAlchemyPollerConfig,
@@ -15,6 +15,7 @@ from mersal.sqlalchemy import (
     SQLAlchemyPollerWithCleanupConfig,
 )
 from mersal.testing.core.testing_utils import is_docker_available
+from mersal.transport import DefaultTransactionContext
 
 __all__ = ("TestSQLAlchemyPoller",)
 
@@ -316,3 +317,61 @@ class TestSQLAlchemyPollerWithCleanup:
         async with async_session_factory() as session:
             count = len((await session.execute(select(base_poller.table))).all())
         assert count == 3
+
+    async def test_push_in_transaction_commits_with_the_handlers_session(self, db_engine: AsyncEngine):
+        async_session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+        config = SQLAlchemyPollerConfig(
+            table_name=f"polling_results_{uuid.uuid4().hex[:8]}",
+            async_session_factory=async_session_factory,
+            session_extractor=lambda transaction_context: transaction_context.items["session"],
+        )
+
+        async with _running_poller(config) as subject:
+            message_id = uuid.uuid4()
+            transaction_context = DefaultTransactionContext()
+            async with async_session_factory() as session:
+                transaction_context.items["session"] = session
+                assert subject.can_push_in_transaction(transaction_context)
+
+                await subject.push_in_transaction(transaction_context, message_id, data={"value": 42})
+                # Not committed by the poller - invisible outside the handler's session.
+                assert await subject.peek(message_id) is None
+
+                await session.commit()
+
+            result = await subject.peek(message_id)
+
+        assert result is not None
+        assert result.is_success
+        assert result.data == {"value": 42}
+
+    async def test_push_in_transaction_rolls_back_with_the_handlers_session(self, db_engine: AsyncEngine):
+        async_session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+        config = SQLAlchemyPollerConfig(
+            table_name=f"polling_results_{uuid.uuid4().hex[:8]}",
+            async_session_factory=async_session_factory,
+            session_extractor=lambda transaction_context: transaction_context.items["session"],
+        )
+
+        async with _running_poller(config) as subject:
+            message_id = uuid.uuid4()
+            transaction_context = DefaultTransactionContext()
+            async with async_session_factory() as session:
+                transaction_context.items["session"] = session
+                await subject.push_in_transaction(transaction_context, message_id)
+                await session.rollback()
+
+            assert await subject.peek(message_id) is None
+
+    async def test_push_in_transaction_requires_a_session_extractor(self, db_engine: AsyncEngine):
+        config = SQLAlchemyPollerConfig(
+            table_name=f"polling_results_{uuid.uuid4().hex[:8]}",
+            async_session_factory=async_sessionmaker(db_engine, expire_on_commit=False),
+        )
+
+        async with _running_poller(config) as subject:
+            transaction_context = DefaultTransactionContext()
+            assert not subject.can_push_in_transaction(transaction_context)
+            assert isinstance(subject, TransactionalPoller)
+            with pytest.raises(RuntimeError):
+                await subject.push_in_transaction(transaction_context, uuid.uuid4())

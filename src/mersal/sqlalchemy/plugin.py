@@ -14,9 +14,11 @@ from mersal.sqlalchemy.sqlalchemy_poller_with_cleanup import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import timedelta
 
     from mersal.configuration import StandardConfigurator
+    from mersal.transport import TransactionContext
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 __all__ = (
@@ -62,6 +64,9 @@ class SQLAlchemyPollerPluginConfig:
     cleanup_older_than: timedelta | None = None
     """Delete polling results older than this on each cleanup run. Requires
     `cleanup_interval` to also be set."""
+    session_extractor: Callable[[TransactionContext], AsyncSession] | None = None
+    """Obtains the handled message's session, making the poller a `TransactionalPoller`.
+    See `SQLAlchemyPollerConfig.session_extractor`."""
 
     def __post_init__(self) -> None:
         if (self.cleanup_interval is None) != (self.cleanup_older_than is None):
@@ -112,6 +117,7 @@ class SQLAlchemyPollerPlugin(Plugin):
                     listen=self._config.listen,
                     listen_notify_fallback_interval=self._config.listen_notify_fallback_interval,
                     logger=logger,
+                    session_extractor=self._config.session_extractor,
                 )
             )
 

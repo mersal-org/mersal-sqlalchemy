@@ -14,8 +14,11 @@ from mersal.sqlalchemy.postgres_notify_listener import PostgresNotifyListener
 from sqlalchemy import MergedResult, delete, func, insert, select, update
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mersal.logging import Logger
     from mersal.polling.poller import PollingStatus
+    from mersal.transport import TransactionContext
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 __all__ = (
@@ -80,6 +83,14 @@ class SQLAlchemyPollerConfig:
     logger: Logger | None = None
     """Structured logger used by the poller and, when LISTEN/NOTIFY is enabled, the
     underlying `PostgresNotifyListener`. Defaults to a no-op logger."""
+    session_extractor: Callable[[TransactionContext], AsyncSession] | None = None
+    """Obtains the session of the message being handled from its `TransactionContext`
+    (typically the unit of work's - the same callback the outbox and saga storages take).
+
+    When set, the poller is a `TransactionalPoller`: `push_in_transaction` writes the
+    result (and its NOTIFY) through that session without committing, so it commits or
+    rolls back with the handler's own work. Used by `PollingConfig(complete_on="publish")`.
+    """
 
     @property
     def poller(self) -> SQLAlchemyPoller:
@@ -101,6 +112,7 @@ class SQLAlchemyPoller(Poller):
         self._listen = config.listen
         self._notify_fallback_interval = config.listen_notify_fallback_interval
         self._logger = config.logger or NullLogger()
+        self._session_extractor = config.session_extractor
         self._listener: PostgresNotifyListener | None = None
         self._notify_channel: str | None = None
 
@@ -192,55 +204,90 @@ class SQLAlchemyPoller(Poller):
             problem: Structured error information (RFC 7807) for failures
         """
         async with self._session_maker() as session:
-            problem_dict = None
-            if problem is not None:
-                problem_dict = {
-                    "type": problem.type,
-                    "title": problem.title,
-                    "status": problem.status,
-                    "detail": problem.detail,
-                    "instance": problem.instance,
-                    "extensions": problem.extensions,
-                }
-
-            # Check if a record already exists
-            stmt = select(self.table).where(self.table.c.message_id == str(message_id))
-            existing = (await session.execute(stmt)).first()
-
-            if existing is not None:
-                # Update existing record to allow status transitions
-                update_stmt = (
-                    update(self.table)
-                    .where(self.table.c.message_id == str(message_id))
-                    .values(
-                        status=status,
-                        data=data,
-                        problem=problem_dict,
-                    )
-                )
-                await session.execute(update_stmt)
-            else:
-                # Insert new record
-                await session.execute(
-                    insert(self.table),
-                    [
-                        {
-                            "message_id": str(message_id),
-                            "status": status,
-                            "data": data,
-                            "problem": problem_dict,
-                            "created_at": datetime.now(timezone.utc),
-                        }
-                    ],
-                )
-
-            if self._notify_channel is not None:
-                # Sent inside this same transaction: Postgres only actually delivers a
-                # NOTIFY if the transaction that issued it commits, so this can never
-                # wake a waiter for a write that gets rolled back.
-                await session.execute(select(func.pg_notify(self._notify_channel, str(message_id))))
-
+            await self._write(session, message_id, status, data, problem)
             await session.commit()
+
+    def can_push_in_transaction(self, transaction_context: TransactionContext) -> bool:
+        """Whether `push_in_transaction` is available - i.e. `session_extractor` is configured."""
+        return self._session_extractor is not None
+
+    async def push_in_transaction(
+        self,
+        transaction_context: TransactionContext,
+        message_id: Any,
+        status: PollingStatus = "succeeded",
+        data: dict[str, Any] | None = None,
+        problem: ProblemDetails | None = None,
+    ) -> None:
+        """Store the result through the session of the message being handled, without
+        committing - it commits or rolls back with the handler's own work.
+
+        Args:
+            transaction_context: The transaction context of the message being handled
+            message_id: The ID of the message
+            status: The status of the operation (accepted, succeeded, failed)
+            data: Success data (for rich results, batch operations)
+            problem: Structured error information (RFC 7807) for failures
+        """
+        if self._session_extractor is None:
+            raise RuntimeError("push_in_transaction requires SQLAlchemyPollerConfig.session_extractor.")
+        await self._write(self._session_extractor(transaction_context), message_id, status, data, problem)
+
+    async def _write(
+        self,
+        session: AsyncSession,
+        message_id: Any,
+        status: PollingStatus,
+        data: dict[str, Any] | None,
+        problem: ProblemDetails | None,
+    ) -> None:
+        problem_dict = None
+        if problem is not None:
+            problem_dict = {
+                "type": problem.type,
+                "title": problem.title,
+                "status": problem.status,
+                "detail": problem.detail,
+                "instance": problem.instance,
+                "extensions": problem.extensions,
+            }
+
+        # Check if a record already exists
+        stmt = select(self.table).where(self.table.c.message_id == str(message_id))
+        existing = (await session.execute(stmt)).first()
+
+        if existing is not None:
+            # Update existing record to allow status transitions
+            update_stmt = (
+                update(self.table)
+                .where(self.table.c.message_id == str(message_id))
+                .values(
+                    status=status,
+                    data=data,
+                    problem=problem_dict,
+                )
+            )
+            await session.execute(update_stmt)
+        else:
+            # Insert new record
+            await session.execute(
+                insert(self.table),
+                [
+                    {
+                        "message_id": str(message_id),
+                        "status": status,
+                        "data": data,
+                        "problem": problem_dict,
+                        "created_at": datetime.now(timezone.utc),
+                    }
+                ],
+            )
+
+        if self._notify_channel is not None:
+            # Sent inside this same transaction: Postgres only actually delivers a
+            # NOTIFY if the transaction that issued it commits, so this can never
+            # wake a waiter for a write that gets rolled back.
+            await session.execute(select(func.pg_notify(self._notify_channel, str(message_id))))
 
     async def cleanup(self, older_than: timedelta) -> int:
         """Clean up old polling results.
