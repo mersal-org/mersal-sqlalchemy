@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     BigInteger,
@@ -179,7 +179,7 @@ def create_polling_results_table(
                 "created_at",
                 DateTime(timezone=True),
                 nullable=False,
-                default=lambda: datetime.now(timezone.utc),
+                default=lambda: datetime.now(UTC),
             ),
             schema=schema,
         )

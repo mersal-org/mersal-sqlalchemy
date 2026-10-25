@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 import anyio
@@ -278,7 +278,7 @@ class SQLAlchemyPoller(Poller):
                         "status": status,
                         "data": data,
                         "problem": problem_dict,
-                        "created_at": datetime.now(timezone.utc),
+                        "created_at": datetime.now(UTC),
                     }
                 ],
             )
@@ -298,7 +298,7 @@ class SQLAlchemyPoller(Poller):
         Returns:
             Number of records deleted
         """
-        cutoff_time = datetime.now(timezone.utc) - older_than
+        cutoff_time = datetime.now(UTC) - older_than
         async with self._session_maker() as session:
             stmt = delete(self.table).where(self.table.c.created_at < cutoff_time)
             result = cast(MergedResult, await session.execute(stmt))

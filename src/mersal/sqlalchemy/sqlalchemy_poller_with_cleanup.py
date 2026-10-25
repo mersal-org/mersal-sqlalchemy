@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -143,7 +143,7 @@ class SQLAlchemyPollerWithCleanup:
 
     async def _maybe_cleanup(self) -> None:
         """Run cleanup if enough time has passed since the last cleanup."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if self._last_cleanup is None or (now - self._last_cleanup) >= self._cleanup_interval:
             await self._poller.cleanup(self._cleanup_older_than)
