@@ -116,6 +116,11 @@ class SQLAlchemyPoller(Poller):
         self._listener: PostgresNotifyListener | None = None
         self._notify_channel: str | None = None
 
+    @property
+    def logger(self) -> Logger:
+        """The poller's structured logger (a no-op logger when none was configured)."""
+        return self._logger
+
     async def poll(
         self,
         message_id: Any,

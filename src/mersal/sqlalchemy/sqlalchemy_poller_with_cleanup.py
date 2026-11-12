@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy.exc import SQLAlchemyError
+
 if TYPE_CHECKING:
     from mersal.polling import PollingResult, ProblemDetails
     from mersal.polling.poller import PollingStatus
@@ -146,5 +148,14 @@ class SQLAlchemyPollerWithCleanup:
         now = datetime.now(UTC)
 
         if self._last_cleanup is None or (now - self._last_cleanup) >= self._cleanup_interval:
-            await self._poller.cleanup(self._cleanup_older_than)
+            # Marked before the attempt: a failed cleanup waits a full interval like a
+            # successful one instead of being retried on every poll.
             self._last_cleanup = now
+            try:
+                await self._poller.cleanup(self._cleanup_older_than)
+            except SQLAlchemyError:
+                # Cleanup is housekeeping and must never fail the poll whose result is
+                # already in hand. Concurrent pollers sharing the table (several
+                # processes, or several tasks in one) can delete the same rows at once,
+                # which Postgres rejects under REPEATABLE READ with a serialization error.
+                self._poller.logger.warning("mersal_sqlalchemy.poller.cleanup_failed", exc_info=True)

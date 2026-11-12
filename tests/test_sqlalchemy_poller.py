@@ -5,6 +5,7 @@ from datetime import timedelta
 
 import pytest
 from sqlalchemy import inspect, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from mersal.polling import ProblemDetails, TransactionalPoller
@@ -200,7 +201,51 @@ class TestSQLAlchemyPoller:
         assert result is not None
 
 
+class _FailingCleanupPoller(SQLAlchemyPoller):
+    """Cleanup fails the way a concurrent DELETE does under REPEATABLE READ."""
+
+    cleanup_calls = 0
+
+    async def cleanup(self, older_than: timedelta) -> int:
+        self.cleanup_calls += 1
+        raise OperationalError(
+            "DELETE FROM polling_results", {}, Exception("could not serialize access due to concurrent delete")
+        )
+
+
 class TestSQLAlchemyPollerWithCleanup:
+    async def test_poll_returns_result_when_cleanup_fails(self, db_engine: AsyncEngine):
+        async_session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+        poller_config = SQLAlchemyPollerConfig(
+            table_name=f"polling_results_{uuid.uuid4().hex[:8]}",
+            async_session_factory=async_session_factory,
+            poll_interval=0.05,
+        )
+        base_poller = _FailingCleanupPoller(poller_config)
+        await base_poller()
+        try:
+            subject = SQLAlchemyPollerWithCleanup(
+                SQLAlchemyPollerWithCleanupConfig(
+                    poller=base_poller,
+                    cleanup_interval=timedelta(hours=1),
+                    cleanup_older_than=timedelta(minutes=30),
+                )
+            )
+
+            first = uuid.uuid4()
+            await subject.push(first, data={"n": 1})
+            result = await subject.poll(first)
+            assert result.message_id == first
+            assert result.data == {"n": 1}
+
+            # A failed cleanup still counts as a run: it isn't retried on every poll.
+            second = uuid.uuid4()
+            await subject.push(second, data={"n": 2})
+            await subject.poll(second)
+            assert base_poller.cleanup_calls == 1
+        finally:
+            await base_poller.aclose()
+
     async def test_poll_triggers_cleanup(self, db_engine: AsyncEngine):
         async_session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
         poller_config = SQLAlchemyPollerConfig(
